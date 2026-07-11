@@ -2,14 +2,19 @@
  * SmartArch — floorPlanSlice.js
  *
  * Redux state for floor plan upload + analysis pipeline.
+ * This is the SINGLE SOURCE OF TRUTH for upload/list/detail state —
+ * hooks (useUpload, usePlans) are thin wrappers around these thunks,
+ * not independent implementations, so there is only one code path
+ * that talks to the backend.
  *
  * State shape:
- *   plans       : []         ← list of user's floor plans (dashboard)
- *   currentPlan : null       ← currently viewed/just-uploaded plan result
- *   uploadStatus: "idle"     ← "idle" | "uploading" | "analysing" | "done" | "error"
- *   uploadProgress: 0        ← file upload progress 0-100
- *   pipelineStep: 0          ← animation step for AnalysisPipelineProgress (1-9)
- *   error       : null       ← error message if upload/fetch fails
+ *   plans         : []      ← list of user's floor plans (dashboard)
+ *   currentPlan   : null    ← currently viewed/just-uploaded plan result
+ *   uploadStatus  : "idle"  ← "idle" | "uploading" | "analysing" | "done" | "error"
+ *   uploadProgress: 0       ← file upload progress 0-100
+ *   pipelineStep  : 0       ← animation step for AnalysisPipelineProgress (1-9)
+ *   plansStatus   : "idle"  ← "idle" | "loading" | "done" | "error"
+ *   error         : null    ← error message if upload/fetch fails
  */
 
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
@@ -21,39 +26,53 @@ import { planApi } from "../api/planApi.js";
  * uploadFloorPlan
  * Uploads the file + starts the backend analysis pipeline.
  * The backend runs synchronously (YOLO → OCR → rooms → save),
- * so a single POST returns the full result when done.
+ * so a single POST returns the full result when done — there is no
+ * separate "poll for status" step.
+ *
+ * @param {{projectName: string, file: File}} payload
  */
 export const uploadFloorPlan = createAsyncThunk(
   "floorPlan/upload",
-  async ({ projectName, file, onProgress }, { dispatch, rejectWithValue }) => {
+  async ({ projectName, file }, { dispatch, rejectWithValue }) => {
+    if (!file) {
+      return rejectWithValue("Please select a floor plan file first.");
+    }
+    if (!projectName || !projectName.trim()) {
+      return rejectWithValue("Please enter a project name.");
+    }
+
     try {
-      // Animate pipeline steps while waiting for backend
+      // Animate pipeline steps while the backend request is in flight.
+      // The backend does not report intermediate progress, so this is
+      // a visual approximation only — the real result overrides it
+      // the moment the response arrives.
       let step = 1;
       dispatch(floorPlanSlice.actions.setPipelineStep(step));
-
       const stepTimer = setInterval(() => {
-        step = Math.min(step + 1, 8);  // advance up to step 8 (step 9 = done)
+        step = Math.min(step + 1, 8);  // hold at step 8 until response arrives
         dispatch(floorPlanSlice.actions.setPipelineStep(step));
-      }, 3500);  // new step every 3.5s (backend ~60-200s total)
+      }, 3500);  // backend pipeline typically takes ~30-90s
 
       const response = await planApi.upload(projectName, file, (pct) => {
         dispatch(floorPlanSlice.actions.setUploadProgress(pct));
-        onProgress?.(pct);
       });
 
       clearInterval(stepTimer);
-      dispatch(floorPlanSlice.actions.setPipelineStep(9));  // all done
 
       if (!response.success) {
-        return rejectWithValue(response.message || "Upload failed.");
+        dispatch(floorPlanSlice.actions.setPipelineStep(0));
+        return rejectWithValue(response.message || "Analysis failed.");
       }
 
-      return response.data;   // AnalysisResultDTO as JSON
+      dispatch(floorPlanSlice.actions.setPipelineStep(9));
+      return response.data;   // AnalysisResultDTO.to_dict() + project_id/share_token/etc.
 
     } catch (err) {
-      const msg = err?.response?.data?.message
-               || err?.message
-               || "Upload failed. Check your connection.";
+      dispatch(floorPlanSlice.actions.setPipelineStep(0));
+      const msg =
+        err?.response?.data?.message ||
+        err?.message ||
+        "Upload failed. Check your connection and try again.";
       return rejectWithValue(msg);
     }
   }
@@ -73,7 +92,9 @@ export const fetchMyPlans = createAsyncThunk(
       }
       return response.data;
     } catch (err) {
-      return rejectWithValue(err?.response?.data?.message || "Could not load plans.");
+      return rejectWithValue(
+        err?.response?.data?.message || err?.message || "Could not load plans."
+      );
     }
   }
 );
@@ -92,7 +113,9 @@ export const fetchPlanById = createAsyncThunk(
       }
       return response.data;
     } catch (err) {
-      return rejectWithValue(err?.response?.data?.message || "Plan not found.");
+      return rejectWithValue(
+        err?.response?.data?.message || err?.message || "Plan not found."
+      );
     }
   }
 );
@@ -109,9 +132,11 @@ export const deletePlan = createAsyncThunk(
       if (!response.success) {
         return rejectWithValue(response.message || "Delete failed.");
       }
-      return projectId;  // return id so reducer can remove from list
+      return projectId;  // return id so the reducer can remove it from the list
     } catch (err) {
-      return rejectWithValue(err?.response?.data?.message || "Delete failed.");
+      return rejectWithValue(
+        err?.response?.data?.message || err?.message || "Delete failed."
+      );
     }
   }
 );
@@ -123,23 +148,23 @@ const floorPlanSlice = createSlice({
   initialState: {
     plans:          [],
     currentPlan:    null,
-    uploadStatus:   "idle",    // "idle"|"uploading"|"analysing"|"done"|"error"
+    uploadStatus:   "idle",    // "idle" | "uploading" | "analysing" | "done" | "error"
     uploadProgress: 0,
     pipelineStep:   0,
+    plansStatus:    "idle",    // "idle" | "loading" | "done" | "error"
     error:          null,
   },
   reducers: {
+    // Advance the pipeline animation step (0-9)
+    setPipelineStep: (state, action) => {
+      state.pipelineStep = action.payload;
+    },
     // Called during upload to update file-send progress (0-100%)
     setUploadProgress: (state, action) => {
       state.uploadProgress = action.payload;
-      // Once file fully sent, switch label from "uploading" to "analysing"
-      if (action.payload >= 100) {
+      if (action.payload >= 100 && state.uploadStatus === "uploading") {
         state.uploadStatus = "analysing";
       }
-    },
-    // Advance the pipeline animation step (1-9)
-    setPipelineStep: (state, action) => {
-      state.pipelineStep = action.payload;
     },
     // Reset upload state (e.g. when navigating away from upload page)
     resetUpload: (state) => {
@@ -183,19 +208,22 @@ const floorPlanSlice = createSlice({
         state.pipelineStep = 0;
       });
 
-    // ── fetchMyPlans ───────────────────────────────────────────────────────
+    // fetchMyPlans 
     builder
       .addCase(fetchMyPlans.pending, (state) => {
+        state.plansStatus = "loading";
         state.error = null;
       })
       .addCase(fetchMyPlans.fulfilled, (state, action) => {
+        state.plansStatus = "done";
         state.plans = action.payload;
       })
       .addCase(fetchMyPlans.rejected, (state, action) => {
+        state.plansStatus = "error";
         state.error = action.payload;
       });
 
-    // ── fetchPlanById ──────────────────────────────────────────────────────
+    // fetchPlanById 
     builder
       .addCase(fetchPlanById.fulfilled, (state, action) => {
         state.currentPlan = action.payload;
@@ -204,13 +232,12 @@ const floorPlanSlice = createSlice({
         state.error = action.payload;
       });
 
-    // ── deletePlan ─────────────────────────────────────────────────────────
+    // deletePlan 
     builder
       .addCase(deletePlan.fulfilled, (state, action) => {
         state.plans = state.plans.filter(
           (p) => p.project_id !== action.payload
         );
-        // If the deleted plan was currently viewed, clear it
         if (state.currentPlan?.project_id === action.payload) {
           state.currentPlan = null;
         }
@@ -221,10 +248,10 @@ const floorPlanSlice = createSlice({
   },
 });
 
-// ── Exports ───────────────────────────────────────────────────────────────────
+
 export const {
-  setUploadProgress,
   setPipelineStep,
+  setUploadProgress,
   resetUpload,
   clearCurrentPlan,
 } = floorPlanSlice.actions;
