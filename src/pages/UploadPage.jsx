@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowRight, Info } from "lucide-react";
 import toast from "react-hot-toast";
-import PageWrapper             from "../components/layout/PageWrapper.jsx";
-import FileDropzone            from "../components/upload/FileDropzone.jsx";
+import PageWrapper              from "../components/layout/PageWrapper.jsx";
+import FileDropzone             from "../components/upload/FileDropzone.jsx";
 import AnalysisPipelineProgress from "../components/upload/AnalysisPipelineProgress.jsx";
+import { useUpload } from "../hooks/useUpload.js";
 
 const TIPS = [
   "High-resolution files give better YOLO detection accuracy.",
@@ -14,37 +15,56 @@ const TIPS = [
 ];
 
 export default function UploadPage() {
-  const navigate       = useNavigate();
-  const [file, setFile]         = useState(null);
-  const [step, setStep]         = useState(0);
-  const [done, setDone]         = useState(false);
-  const [loading, setLoading]   = useState(false);
+  const navigate = useNavigate();
+  const { status, step, result, error, upload, reset } = useUpload();
 
-  const handleSubmit = () => {
-    if (!file) { 
-      toast.error("Please select a floor plan file first."); 
-      return; 
+  const [file, setFile]               = useState(null);
+  const [projectName, setProjectName] = useState("");
+
+  const loading = status === "uploading" || status === "analysing";
+  const done    = status === "done";
+
+  // Reset any leftover state from a previous visit to this page
+  useEffect(() => {
+    reset();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Surface backend/connection errors to the user — never fail silently
+  useEffect(() => {
+    if (status === "error" && error) {
+      toast.error(error);
+    }
+  }, [status, error]);
+
+  // On success, hand off to the result page using the REAL project_id
+  // returned by the backend (not a hardcoded id)
+  useEffect(() => {
+    if (done && result?.project_id) {
+      toast.success("Analysis complete!");
+      const timer = setTimeout(() => {
+        navigate(`/result/${result.project_id}`);
+      }, 800);
+      return () => clearTimeout(timer);
+    }
+  }, [done, result, navigate]);
+
+  const handleSubmit = async () => {
+    if (!file) {
+      toast.error("Please select a floor plan file first.");
+      return;
+    }
+    if (!projectName.trim()) {
+      toast.error("Please enter a project name.");
+      return;
     }
 
-    setLoading(true);
-    setStep(1);
-
-    let s = 1;
-    const interval = setInterval(() => {
-      s++;
-      setStep(s);
-      if (s >= 9) {
-        clearInterval(interval);
-        setTimeout(() => {
-          setDone(true);
-          setTimeout(() => {
-            setLoading(false);
-            toast.success("Analysis complete!");
-            navigate("/result/1");
-          }, 800);
-        }, 600);
-      }
-    }, 900);
+    try {
+      await upload(projectName.trim(), file);
+      // success path handled by the effect above once `result` updates
+    } catch (err) {
+      // error already reflected in `error` state / toast via the effect above
+    }
   };
 
   return (
@@ -53,19 +73,19 @@ export default function UploadPage() {
 
         {/* Page header */}
         <div className="mb-10 space-y-1">
-          <p 
+          <p
             className="label-mono text-bronze-DEFAULT"
             style={{ fontFamily: "'Saira', sans-serif" }}
           >
             New Analysis
           </p>
-          <h1 
+          <h1
             className="font-display text-display-lg text-stone-900"
             style={{ fontFamily: "'Saira', sans-serif" }}
           >
             Upload floor plan
           </h1>
-          <p 
+          <p
             className="text-sm text-stone-500"
             style={{ fontFamily: "'Fredoka', sans-serif" }}
           >
@@ -75,16 +95,43 @@ export default function UploadPage() {
 
         <div className="grid lg:grid-cols-5 gap-8">
 
-          {/* ── Left — Upload + submit ─────────────────────────────── */}
+          {/* ── Left — Project name, upload + submit ────────────────── */}
           <div className="lg:col-span-3 space-y-6">
+
+            {/* Project name — required by the backend */}
+            {!loading && !done && (
+              <div className="space-y-1.5">
+                <label
+                  htmlFor="project-name"
+                  className="label-mono text-stone-500 block"
+                  style={{ fontFamily: "'Saira', sans-serif" }}
+                >
+                  Project name
+                </label>
+                <input
+                  id="project-name"
+                  type="text"
+                  value={projectName}
+                  onChange={(e) => setProjectName(e.target.value)}
+                  placeholder="e.g. Villa Serenova"
+                  maxLength={255}
+                  className="w-full px-4 py-3 bg-white border border-stone-200
+                             rounded-sm text-sm text-stone-700
+                             focus:outline-none focus:ring-1 focus:ring-bronze-DEFAULT
+                             focus:border-bronze-DEFAULT"
+                  style={{ fontFamily: "'Fredoka', sans-serif" }}
+                />
+              </div>
+            )}
+
             <FileDropzone onFileSelected={setFile} />
 
             {/* File info summary */}
-            {file && !loading && (
+            {file && !loading && !done && (
               <div className="flex items-center justify-between px-4 py-3
                               bg-stone-50 border border-stone-200 rounded-sm">
                 <div className="space-y-0.5">
-                  <p 
+                  <p
                     className="font-sans text-sm text-stone-700 font-medium"
                     style={{ fontFamily: "'Saira', sans-serif" }}
                   >
@@ -107,60 +154,79 @@ export default function UploadPage() {
               </div>
             )}
 
-            {/* Tips */}
-            <div className="border border-stone-200 rounded-md p-5 space-y-3 bg-white">
-              <div className="flex items-center gap-2">
-                <Info size={13} className="text-bronze-DEFAULT" />
-                <p 
-                  className="label-mono text-bronze-DEFAULT"
-                  style={{ fontFamily: "'Saira', sans-serif" }}
+            {status === "error" && (
+              <div className="px-4 py-3 bg-red-50 border border-red-200 rounded-sm">
+                <p
+                  className="text-sm text-red-700"
+                  style={{ fontFamily: "'Fredoka', sans-serif" }}
                 >
-                  Upload tips
+                  {error || "Analysis failed. Please try again."}
                 </p>
+                <button
+                  onClick={() => reset()}
+                  className="mt-2 text-xs font-medium text-red-700 underline"
+                >
+                  Try again
+                </button>
               </div>
-              <ul className="space-y-2">
-                {TIPS.map((tip) => (
-                  <li key={tip} className="flex items-start gap-2">
-                    <span className="w-1 h-1 bg-stone-400 rounded-full mt-2 flex-shrink-0" />
-                    <span 
-                      className="text-xs text-stone-500 leading-relaxed"
-                      style={{ fontFamily: "'Fredoka', sans-serif" }}
-                    >
-                      {tip}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </div>
+            )}
+
+            {/* Tips */}
+            {!loading && !done && (
+              <div className="border border-stone-200 rounded-md p-5 space-y-3 bg-white">
+                <div className="flex items-center gap-2">
+                  <Info size={13} className="text-bronze-DEFAULT" />
+                  <p
+                    className="label-mono text-bronze-DEFAULT"
+                    style={{ fontFamily: "'Saira', sans-serif" }}
+                  >
+                    Upload tips
+                  </p>
+                </div>
+                <ul className="space-y-2">
+                  {TIPS.map((tip) => (
+                    <li key={tip} className="flex items-start gap-2">
+                      <span className="w-1 h-1 bg-stone-400 rounded-full mt-2 flex-shrink-0" />
+                      <span
+                        className="text-xs text-stone-500 leading-relaxed"
+                        style={{ fontFamily: "'Fredoka', sans-serif" }}
+                      >
+                        {tip}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </div>
 
           {/* ── Right — What happens next ───────────────────────────── */}
           <div className="lg:col-span-2 space-y-4">
             <div className="card p-5 space-y-4">
-              <p 
+              <p
                 className="label-mono text-stone-500"
                 style={{ fontFamily: "'Saira', sans-serif" }}
               >
                 What gets extracted
               </p>
               {[
-                { n: "01", label: "Wall positions",       sub: "Every wall detected and measured" },
-                { n: "02", label: "Doors & windows",      sub: "Count, size, and position" },
-                { n: "03", label: "Room labels",          sub: "OCR reads dimension text" },
-                { n: "04", label: "Floor areas",          sub: "Per-room and total in m²" },
-                { n: "05", label: "GPT-4o summary",       sub: "Architectural insights" },
-                { n: "06", label: "Client share link",    sub: "Instant chatbot for your client" },
+                { n: "01", label: "Wall positions",    sub: "Every wall detected and measured" },
+                { n: "02", label: "Doors & windows",   sub: "Count, size, and position" },
+                { n: "03", label: "Room labels",       sub: "Custom detector + OCR reads dimension text" },
+                { n: "04", label: "Floor areas",       sub: "Per-room and total in sq.ft / m²" },
+                { n: "05", label: "AI summary",        sub: "Architectural insights via Gemini" },
+                { n: "06", label: "Client share link", sub: "Instant chatbot for your client" },
               ].map(({ n, label, sub }) => (
                 <div key={n} className="flex items-start gap-3">
                   <span className="font-mono text-xs text-stone-300 mt-0.5 flex-shrink-0 w-5">{n}</span>
                   <div>
-                    <p 
+                    <p
                       className="text-sm text-stone-700 font-medium leading-none mb-0.5"
                       style={{ fontFamily: "'Saira', sans-serif" }}
                     >
                       {label}
                     </p>
-                    <p 
+                    <p
                       className="font-mono text-xs text-stone-400"
                       style={{ fontFamily: "'Fredoka', sans-serif" }}
                     >
@@ -170,7 +236,6 @@ export default function UploadPage() {
                 </div>
               ))}
             </div>
-
           </div>
 
         </div>
