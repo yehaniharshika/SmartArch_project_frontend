@@ -266,3 +266,22 @@ h1, h2, h3, h4 {
     stroke-dashoffset: 0 !important;
   }
 }
+
+/* ── Card top accent line — the "neon strip" on the login form card ── */
+@keyframes accentSweep {
+  0%   { background-position: -100% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.accent-sweep {
+  background: linear-gradient(
+    90deg,
+    var(--parchment)   0%,
+    var(--bronze-light) 35%,
+    var(--bronze)       50%,
+    var(--bronze-light) 65%,
+    var(--parchment)   100%
+  );
+  background-size: 200% 100%;
+  animation: accentSweep 3s ease-in-out infinite;
+}

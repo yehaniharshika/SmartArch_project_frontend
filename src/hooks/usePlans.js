@@ -1,112 +1,127 @@
-import { useState, useEffect, useCallback } from "react";
-import { planApi } from "../api/planApi.js";
-
 /**
- * Hook to fetch and manage the list of floor plans.
- * Falls back to mock data when backend is not available.
+ * SmartArch — services/planApi.js
+ * Calls to /api/floor-plan/* and /api/chat/* endpoints.
+ *
+ * Backend endpoints (see FloorPlan_controller.py / Chat_controller.py):
+ *   POST   /api/floor-plan/upload          ← upload + analyze (JWT required)
+ *   GET    /api/floor-plan/my-plans        ← list user's plans (JWT required)
+ *   GET    /api/floor-plan/<project_id>    ← get single plan   (JWT required)
+ *   DELETE /api/floor-plan/<project_id>    ← delete plan       (JWT required)
+ *   GET    /api/floor-plan/share/<token>   ← public share view (no auth)
+ *   POST   /api/chat/share/<token>/ask     ← client asks chatbot (no auth)
+ *   POST   /api/chat/<project_id>/ask      ← architect asks    (JWT required)
+ *   GET    /api/chat/<project_id>/history  ← chat history      (JWT required)
+ *
+ * IMPORTANT: `client` (axios instance) is expected to attach the
+ * Authorization: Bearer <token> header automatically via an interceptor
+ * for every request except the two public share-link endpoints below.
  */
-export function usePlans() {
-  const [plans, setPlans]     = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError]     = useState(null);
 
-  const fetchPlans = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const data = await planApi.list();
-      setPlans(data.plans || []);
-    } catch (err) {
-      // UI-only mode: use mock data
-      setPlans(MOCK_PLANS);
-      setError(null);   // silently fall back
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+import client from "./client.js";
 
-  useEffect(() => { fetchPlans(); }, [fetchPlans]);
+export const planApi = {
 
-  const deletePlan = useCallback(async (id) => {
-    try {
-      await planApi.delete(id);
-    } catch { /* silent in mock mode */ }
-    setPlans((prev) => prev.filter((p) => p.id !== id));
-  }, []);
+  // ── UPLOAD ─────────────────────────────────────────────────
+  /**
+   * Upload a floor plan for analysis.
+   * Backend expects multipart/form-data with fields:
+   *   project_name (text, required)
+   *   file         (file, required — PNG/JPG/JPEG/PDF)
+   *
+   * @param {string}   projectName
+   * @param {File}     file
+   * @param {function} [onProgress]  (percent: number) => void
+   * @returns {Promise<{success: boolean, data?: object, message?: string}>}
+   */
+  upload: (projectName, file, onProgress) => {
+    const form = new FormData();
+    form.append("project_name", projectName || "Untitled Project");
+    form.append("file", file);
 
-  return { plans, setPlans, loading, error, refetch: fetchPlans, deletePlan };
-}
+    return client
+      .post("/api/floor-plan/upload", form, {
+        headers: { "Content-Type": "multipart/form-data" },
+        timeout: 300000,   // 5 min — YOLO + OCR pipeline can take time
+        onUploadProgress: (evt) => {
+          if (onProgress && evt.total) {
+            onProgress(Math.round((evt.loaded / evt.total) * 100));
+          }
+        },
+      })
+      .then((r) => r.data);
+  },
 
-/**
- * Hook to fetch a single floor plan by ID.
- */
-export function usePlan(id) {
-  const [plan, setPlan]       = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError]     = useState(null);
+  // ── LIST ────────────────────────────────────────────────────
+  /**
+   * List all floor plans for the logged-in architect.
+   * Backend response shape: { success, count, data: [FloorPlan, ...] }
+   */
+  list: () =>
+    client.get("/api/floor-plan/my-plans").then((r) => r.data),
 
-  useEffect(() => {
-    if (!id) return;
-    setLoading(true);
-    planApi.getById(id)
-      .then((data) => setPlan(data.plan))
-      .catch(() => setPlan(MOCK_PLANS.find((p) => p.id === Number(id)) || null))
-      .finally(() => setLoading(false));
-  }, [id]);
+  // ── GET BY ID ───────────────────────────────────────────────
+  /**
+   * Get a single floor plan's full analysis result.
+   * @param {string} projectId  e.g. "PRJ-AB1C2D"
+   */
+  getById: (projectId) =>
+    client.get(`/api/floor-plan/${projectId}`).then((r) => r.data),
 
-  return { plan, loading, error };
-}
+  // ── PUBLIC SHARE VIEW ───────────────────────────────────────
+  /**
+   * Get a floor plan by its share token — PUBLIC, no auth needed.
+   * Used when the client opens the shared link.
+   * @param {string} shareToken  (from upload response's "share_token" field)
+   */
+  getByShareToken: (shareToken) =>
+    client.get(`/api/floor-plan/share/${shareToken}`).then((r) => r.data),
 
-/**
- * Hook to load a plan by share token (public, no auth).
- */
-export function usePlanByToken(token) {
-  const [plan, setPlan]       = useState(null);
-  const [loading, setLoading] = useState(true);
+  // ── DELETE ──────────────────────────────────────────────────
+  /**
+   * Delete a floor plan and all its related data (detections, OCR, chat).
+   * Also removes uploaded/annotated files from disk (handled server-side).
+   * @param {string} projectId
+   */
+  delete: (projectId) =>
+    client.delete(`/api/floor-plan/${projectId}`).then((r) => r.data),
+};
 
-  useEffect(() => {
-    if (!token) return;
-    planApi.getByShareToken(token)
-      .then((data) => setPlan(data.plan))
-      .catch(() => setPlan(MOCK_PLAN_DETAIL))
-      .finally(() => setLoading(false));
-  }, [token]);
+// ── CHAT API ────────────────────────────────────────────────────
+export const chatApi = {
 
-  return { plan, loading };
-}
+  /**
+   * Client asks a question via the public share link.
+   * NO authentication required — the share token identifies the plan.
+   *
+   * IMPORTANT: shareToken ≠ login JWT!
+   * Use the "share_token" field from the upload response.
+   *
+   * @param {string} shareToken  from upload response "share_token"
+   * @param {string} question    the client's question
+   */
+  askViaShareLink: (shareToken, question) =>
+    client
+      .post(
+        `/api/chat/share/${shareToken}/ask`,
+        { question },
+        { headers: { Authorization: undefined } }  // no auth header needed
+      )
+      .then((r) => r.data),
 
-// ── Mock data ──────────────────────────────────────────────────────────────────
-const MOCK_PLANS = [
-  { id:1, original_filename:"villa_ground_floor.pdf",  status:"ready",      total_floor_area_sqm:215.4,  wall_count:18, door_count:8,  window_count:12, room_count:6, share_token:"tok_abc123", created_at:"2024-11-10T09:30:00Z" },
-  { id:2, original_filename:"apartment_type_a.png",    status:"ready",      total_floor_area_sqm:88.2,   wall_count:10, door_count:4,  window_count:6,  room_count:4, share_token:"tok_def456", created_at:"2024-11-08T14:20:00Z" },
-  { id:3, original_filename:"office_level2.jpg",       status:"processing", total_floor_area_sqm:0,      wall_count:0,  door_count:0,  window_count:0,  room_count:0, share_token:null,          created_at:"2024-11-12T08:10:00Z" },
-  { id:4, original_filename:"bungalow_plan.pdf",       status:"ready",      total_floor_area_sqm:142.7,  wall_count:14, door_count:6,  window_count:9,  room_count:5, share_token:"tok_ghi789", created_at:"2024-11-05T11:45:00Z" },
-  { id:5, original_filename:"showroom_layout.pdf",     status:"error",      total_floor_area_sqm:0,      wall_count:0,  door_count:0,  window_count:0,  room_count:0, share_token:null,          created_at:"2024-11-11T16:00:00Z" },
-];
+  /**
+   * Architect asks a question (JWT required).
+   * @param {string} projectId
+   * @param {string} question
+   */
+  askAsArchitect: (projectId, question) =>
+    client
+      .post(`/api/chat/${projectId}/ask`, { question })
+      .then((r) => r.data),
 
-const MOCK_PLAN_DETAIL = {
-  id:1, original_filename:"villa_ground_floor.pdf", status:"ready",
-  image_width_px:2480, image_height_px:1754,
-  scale:{ pixels_per_meter:82.5, method:"scale_ratio", confidence:0.90 },
-  wall_count:18, door_count:8, window_count:12, room_count:6,
-  total_floor_area_sqm:215.4, total_floor_area_sqft:2318.2,
-  processing_time_sec:8.34,
-  share_token:"tok_abc123eyJhbGciOiJIUzI1NiJ9",
-  gpt_summary:"Ground floor of a residential villa spanning approximately 215 m². The open-plan living and dining areas occupy the central zone, benefiting from south-facing windows. Three bedrooms are positioned on the north wing for privacy, each with direct bathroom access.",
-  gpt_room_list:["Living Room","Dining Room","Kitchen","Bedroom 1","Bedroom 2","Bedroom 3","Bathroom 1","Bathroom 2","Utility Room","Garage"],
-  detections:[
-    { label:"door",   confidence:0.92, width_m:0.90, height_m:2.10, area_sqm:1.89, ocr_label:"Main Entrance", x1:100, y1:200, x2:190, y2:410 },
-    { label:"door",   confidence:0.88, width_m:0.80, height_m:2.10, area_sqm:1.68, ocr_label:"Bedroom 1",     x1:300, y1:150, x2:380, y2:360 },
-    { label:"window", confidence:0.91, width_m:1.20, height_m:1.50, area_sqm:1.80, ocr_label:null,            x1:500, y1:20,  x2:620, y2:140 },
-    { label:"window", confidence:0.87, width_m:0.90, height_m:1.20, area_sqm:1.08, ocr_label:null,            x1:700, y1:20,  x2:790, y2:120 },
-    { label:"wall",   confidence:0.96, width_m:8.40, height_m:0.20, area_sqm:1.68, ocr_label:null,            x1:20,  y1:20,  x2:712, y2:36  },
-    { label:"wall",   confidence:0.94, width_m:6.20, height_m:0.20, area_sqm:1.24, ocr_label:null,            x1:20,  y1:20,  x2:20,  y2:516 },
-  ],
-  ocr_texts:[
-    { text:"3.500m", is_dimension:true,  parsed_meters:3.5, confidence:0.92 },
-    { text:"4.200m", is_dimension:true,  parsed_meters:4.2, confidence:0.88 },
-    { text:"1:100",  is_dimension:true,  parsed_meters:null,confidence:0.96 },
-    { text:"Living Room", is_dimension:false, confidence:0.95 },
-    { text:"Kitchen",     is_dimension:false, confidence:0.89 },
-  ],
+  /**
+   * Get chat history for a project (JWT required).
+   * @param {string} projectId
+   */
+  getHistory: (projectId) =>
+    client.get(`/api/chat/${projectId}/history`).then((r) => r.data),
 };
