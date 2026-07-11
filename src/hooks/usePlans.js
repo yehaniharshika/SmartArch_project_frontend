@@ -1,127 +1,100 @@
+import { useEffect, useCallback, useState } from "react";
+import { useDispatch, useSelector } from "react-redux";
+import {
+  fetchMyPlans,
+  fetchPlanById,
+  deletePlan as deletePlanThunk,
+} from "../reducers/FloorPlanSlice.js";
+import { planApi } from "../api/planApi.js";
+
 /**
- * SmartArch — services/planApi.js
- * Calls to /api/floor-plan/* and /api/chat/* endpoints.
- *
- * Backend endpoints (see FloorPlan_controller.py / Chat_controller.py):
- *   POST   /api/floor-plan/upload          ← upload + analyze (JWT required)
- *   GET    /api/floor-plan/my-plans        ← list user's plans (JWT required)
- *   GET    /api/floor-plan/<project_id>    ← get single plan   (JWT required)
- *   DELETE /api/floor-plan/<project_id>    ← delete plan       (JWT required)
- *   GET    /api/floor-plan/share/<token>   ← public share view (no auth)
- *   POST   /api/chat/share/<token>/ask     ← client asks chatbot (no auth)
- *   POST   /api/chat/<project_id>/ask      ← architect asks    (JWT required)
- *   GET    /api/chat/<project_id>/history  ← chat history      (JWT required)
- *
- * IMPORTANT: `client` (axios instance) is expected to attach the
- * Authorization: Bearer <token> header automatically via an interceptor
- * for every request except the two public share-link endpoints below.
+ * Hook to fetch and manage the list of floor plans.
+ * Thin wrapper around Redux state — no mock-data fallback, so a real
+ * backend/connection failure surfaces as `error` instead of being
+ * silently hidden behind fake data.
  */
+export function usePlans() {
+  const dispatch = useDispatch();
+  const plans  = useSelector((s) => s.floorPlan.plans);
+  const status = useSelector((s) => s.floorPlan.plansStatus);
+  const error  = useSelector((s) => s.floorPlan.error);
 
-import client from "./client.js";
+  const refetch = useCallback(() => {
+    dispatch(fetchMyPlans());
+  }, [dispatch]);
 
-export const planApi = {
+  useEffect(() => {
+    refetch();
+  }, [refetch]);
 
-  // ── UPLOAD ─────────────────────────────────────────────────
-  /**
-   * Upload a floor plan for analysis.
-   * Backend expects multipart/form-data with fields:
-   *   project_name (text, required)
-   *   file         (file, required — PNG/JPG/JPEG/PDF)
-   *
-   * @param {string}   projectName
-   * @param {File}     file
-   * @param {function} [onProgress]  (percent: number) => void
-   * @returns {Promise<{success: boolean, data?: object, message?: string}>}
-   */
-  upload: (projectName, file, onProgress) => {
-    const form = new FormData();
-    form.append("project_name", projectName || "Untitled Project");
-    form.append("file", file);
+  const deletePlan = useCallback(
+    async (projectId) => {
+      const action = await dispatch(deletePlanThunk(projectId));
+      if (!deletePlanThunk.fulfilled.match(action)) {
+        throw new Error(action.payload || "Delete failed.");
+      }
+    },
+    [dispatch]
+  );
 
-    return client
-      .post("/api/floor-plan/upload", form, {
-        headers: { "Content-Type": "multipart/form-data" },
-        timeout: 300000,   // 5 min — YOLO + OCR pipeline can take time
-        onUploadProgress: (evt) => {
-          if (onProgress && evt.total) {
-            onProgress(Math.round((evt.loaded / evt.total) * 100));
-          }
-        },
+  return {
+    plans,
+    loading: status === "loading",
+    error,
+    refetch,
+    deletePlan,
+  };
+}
+
+/**
+ * Hook to fetch a single floor plan by ID.
+ */
+export function usePlan(projectId) {
+  const dispatch = useDispatch();
+  const plan  = useSelector((s) => s.floorPlan.currentPlan);
+  const error = useSelector((s) => s.floorPlan.error);
+
+  useEffect(() => {
+    if (!projectId) return;
+    dispatch(fetchPlanById(projectId));
+  }, [projectId, dispatch]);
+
+  const loading = !plan && !error;
+
+  return { plan, loading, error };
+}
+
+/**
+ * Hook to load a plan by share token — PUBLIC, no auth/login required.
+ * Kept as local state (not Redux) since this is used on the standalone
+ * public client-facing chat page, unrelated to the logged-in architect's
+ * plan list.
+ */
+export function usePlanByToken(token) {
+  const [plan, setPlan]       = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError]     = useState(null);
+
+  useEffect(() => {
+    if (!token) return;
+    setLoading(true);
+    setError(null);
+    planApi
+      .getByShareToken(token)
+      .then((response) => {
+        if (!response.success) {
+          setError(response.message || "Floor plan not found.");
+          return;
+        }
+        setPlan(response.data);
       })
-      .then((r) => r.data);
-  },
+      .catch((err) => {
+        setError(
+          err?.response?.data?.message || err?.message || "Floor plan not found."
+        );
+      })
+      .finally(() => setLoading(false));
+  }, [token]);
 
-  // ── LIST ────────────────────────────────────────────────────
-  /**
-   * List all floor plans for the logged-in architect.
-   * Backend response shape: { success, count, data: [FloorPlan, ...] }
-   */
-  list: () =>
-    client.get("/api/floor-plan/my-plans").then((r) => r.data),
-
-  // ── GET BY ID ───────────────────────────────────────────────
-  /**
-   * Get a single floor plan's full analysis result.
-   * @param {string} projectId  e.g. "PRJ-AB1C2D"
-   */
-  getById: (projectId) =>
-    client.get(`/api/floor-plan/${projectId}`).then((r) => r.data),
-
-  // ── PUBLIC SHARE VIEW ───────────────────────────────────────
-  /**
-   * Get a floor plan by its share token — PUBLIC, no auth needed.
-   * Used when the client opens the shared link.
-   * @param {string} shareToken  (from upload response's "share_token" field)
-   */
-  getByShareToken: (shareToken) =>
-    client.get(`/api/floor-plan/share/${shareToken}`).then((r) => r.data),
-
-  // ── DELETE ──────────────────────────────────────────────────
-  /**
-   * Delete a floor plan and all its related data (detections, OCR, chat).
-   * Also removes uploaded/annotated files from disk (handled server-side).
-   * @param {string} projectId
-   */
-  delete: (projectId) =>
-    client.delete(`/api/floor-plan/${projectId}`).then((r) => r.data),
-};
-
-// ── CHAT API ────────────────────────────────────────────────────
-export const chatApi = {
-
-  /**
-   * Client asks a question via the public share link.
-   * NO authentication required — the share token identifies the plan.
-   *
-   * IMPORTANT: shareToken ≠ login JWT!
-   * Use the "share_token" field from the upload response.
-   *
-   * @param {string} shareToken  from upload response "share_token"
-   * @param {string} question    the client's question
-   */
-  askViaShareLink: (shareToken, question) =>
-    client
-      .post(
-        `/api/chat/share/${shareToken}/ask`,
-        { question },
-        { headers: { Authorization: undefined } }  // no auth header needed
-      )
-      .then((r) => r.data),
-
-  /**
-   * Architect asks a question (JWT required).
-   * @param {string} projectId
-   * @param {string} question
-   */
-  askAsArchitect: (projectId, question) =>
-    client
-      .post(`/api/chat/${projectId}/ask`, { question })
-      .then((r) => r.data),
-
-  /**
-   * Get chat history for a project (JWT required).
-   * @param {string} projectId
-   */
-  getHistory: (projectId) =>
-    client.get(`/api/chat/${projectId}/history`).then((r) => r.data),
-};
+  return { plan, loading, error };
+}
