@@ -10,7 +10,6 @@ import { useUpload } from "../hooks/useUpload.js";
 const TIPS = [
   "High-resolution files give better YOLO detection accuracy.",
   "PDF files are converted at 200 DPI internally.",
-  "Ensure dimension annotations are visible for accurate scale detection.",
   "Supported: PNG, JPG, JPEG, PDF up to 20 MB.",
 ];
 
@@ -75,7 +74,7 @@ export default function UploadPage() {
         <div className="mb-10 space-y-1">
           <p
             className="label-mono text-bronze-DEFAULT"
-            style={{ fontFamily: "'Saira', sans-serif" }}
+            style={{ fontFamily: "'Saira', sans-serif", fontSize: "16px",fontWeight: "500" }}
           >
             New Analysis
           </p>
@@ -86,10 +85,10 @@ export default function UploadPage() {
             Upload floor plan
           </h1>
           <p
-            className="text-sm text-stone-500"
+            className="text-md text-stone-500"
             style={{ fontFamily: "'Fredoka', sans-serif" }}
           >
-            Upload your architectural drawing to begin AI analysis.
+            Upload your architectural drawing to begin analysis.
           </p>
         </div>
 
@@ -188,8 +187,8 @@ export default function UploadPage() {
                     <li key={tip} className="flex items-start gap-2">
                       <span className="w-1 h-1 bg-stone-400 rounded-full mt-2 flex-shrink-0" />
                       <span
-                        className="text-xs text-stone-500 leading-relaxed"
-                        style={{ fontFamily: "'Fredoka', sans-serif" }}
+                        className="text-stone-500 leading-relaxed"
+                        style={{ fontFamily: "'Fredoka', sans-serif,",fontSize: "14px" }}
                       >
                         {tip}
                       </span>
@@ -210,25 +209,25 @@ export default function UploadPage() {
                 What gets extracted
               </p>
               {[
-                { n: "01", label: "Wall positions",    sub: "Every wall detected and measured" },
-                { n: "02", label: "Doors & windows",   sub: "Count, size, and position" },
+                { n: "01", label: "Wall positions",    sub: "Every wall detected" },
+                { n: "02", label: "Doors & windows",   sub: "Count and position" },
                 { n: "03", label: "Room labels",       sub: "Custom detector + OCR reads dimension text" },
                 { n: "04", label: "Floor areas",       sub: "Per-room and total in sq.ft / m²" },
                 { n: "05", label: "AI summary",        sub: "Architectural insights via Gemini" },
                 { n: "06", label: "Client share link", sub: "Instant chatbot for your client" },
               ].map(({ n, label, sub }) => (
                 <div key={n} className="flex items-start gap-3">
-                  <span className="font-mono text-xs text-stone-300 mt-0.5 flex-shrink-0 w-5">{n}</span>
+                  <span className="font-mono text-stone-300 mt-0.5 flex-shrink-0 w-5" style={{fontSize:"14px"}}>{n}</span>
                   <div>
                     <p
-                      className="text-sm text-stone-700 font-medium leading-none mb-0.5"
-                      style={{ fontFamily: "'Saira', sans-serif" }}
+                      className=" text-stone-700 font-medium leading-none mb-0.5"
+                      style={{ fontFamily: "'Saira', sans-serif",fontSize:"14px" }}
                     >
                       {label}
                     </p>
                     <p
-                      className="font-mono text-xs text-stone-400"
-                      style={{ fontFamily: "'Fredoka', sans-serif" }}
+                      className="font-mono text-stone-400"
+                      style={{ fontFamily: "'Fredoka', sans-serif", fontSize: "14px" }}
                     >
                       {sub}
                     </p>

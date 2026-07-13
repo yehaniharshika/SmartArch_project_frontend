@@ -35,11 +35,6 @@ const FEATURES = [
     desc: "Automatic floor area calculation per room and total — in m² and ft².",
   },
   {
-    icon: Bot,
-    title: "GPT-4o Vision",
-    desc: "Deep architectural analysis provides room identification, layout summary, and design insights.",
-  },
-  {
     icon: Share2,
     title: "Instant Client Link",
     desc: "Generate a private shareable link for your client in one click — no login required for them.",

@@ -1,246 +1,197 @@
-import { useState } from "react";
-import { Link } from "react-router-dom";
-import {
-  Plus,
-  LayoutGrid,
-  List,
-  Search,
-  FileImage,
-  TrendingUp,
-  DoorOpen,
-  Square,
-} from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import toast from "react-hot-toast";
+import { Trash2, ExternalLink, Copy, Plus } from "lucide-react";
 import PageWrapper from "../components/layout/PageWrapper.jsx";
-import PlanCard from "../components/upload/PlanCard.jsx";
-import StatCard from "../components/ui/StatCard.jsx";
-import EmptyState from "../components/ui/EmptyState.jsx";
+import { usePlans } from "../hooks/usePlans.js";
 
-// ── Mock data ────────────────────────────────────────────────────────────────
-const MOCK_PLANS = [
-  {
-    id: 1,
-    original_filename: "villa_ground_floor.pdf",
-    status: "ready",
-    total_floor_area_sqm: 215.4,
-    wall_count: 18,
-    door_count: 8,
-    window_count: 12,
-    room_count: 6,
-    share_token: "tok_abc123",
-    created_at: "2024-11-10T09:30:00Z",
-  },
-  {
-    id: 2,
-    original_filename: "apartment_type_a.png",
-    status: "ready",
-    total_floor_area_sqm: 88.2,
-    wall_count: 10,
-    door_count: 4,
-    window_count: 6,
-    room_count: 4,
-    share_token: "tok_def456",
-    created_at: "2024-11-08T14:20:00Z",
-  },
-  {
-    id: 3,
-    original_filename: "office_level2.jpg",
-    status: "processing",
-    total_floor_area_sqm: 0,
-    wall_count: 0,
-    door_count: 0,
-    window_count: 0,
-    room_count: 0,
-    share_token: null,
-    created_at: "2024-11-12T08:10:00Z",
-  },
-  {
-    id: 4,
-    original_filename: "bungalow_plan.pdf",
-    status: "ready",
-    total_floor_area_sqm: 142.7,
-    wall_count: 14,
-    door_count: 6,
-    window_count: 9,
-    room_count: 5,
-    share_token: "tok_ghi789",
-    created_at: "2024-11-05T11:45:00Z",
-  },
-  {
-    id: 5,
-    original_filename: "showroom_layout.pdf",
-    status: "error",
-    total_floor_area_sqm: 0,
-    wall_count: 0,
-    door_count: 0,
-    window_count: 0,
-    room_count: 0,
-    share_token: null,
-    created_at: "2024-11-11T16:00:00Z",
-  },
-];
+/**
+ * NOTE: This file was not part of the originally supplied frontend code —
+ * it is built from scratch here, matching the visual conventions used in
+ * UploadPage.jsx (PageWrapper, Saira/Fredoka fonts, stone/bronze palette).
+ *
+ * Field names read from each plan object (e.g. `plan.project_id`,
+ * `plan.room_count`) assume the same key names FloorPlan_service.py uses
+ * when building the upload response (AnalysisResultDTO.to_dict() +
+ * project_id/project_name). The exact keys returned by
+ * `FloorPlan_entity.to_dict()` for the /my-plans list endpoint were not
+ * available when writing this file — confirm they match, or adjust the
+ * `pid`/field lookups below if your entity uses different key names
+ * (e.g. "id" instead of "project_id").
+ */
 
-const MOCK_USER = { name: "Ruwan Perera" };
+const STATUS_STYLES = {
+  ready:      { label: "Ready",      className: "bg-green-50 text-green-700 border-green-200" },
+  processing: { label: "Processing", className: "bg-amber-50 text-amber-700 border-amber-200" },
+  error:      { label: "Error",      className: "bg-red-50 text-red-700 border-red-200" },
+};
 
 export default function DashboardPage() {
-  const [plans, setPlans] = useState(MOCK_PLANS);
-  const [view, setView] = useState("grid");
-  const [search, setSearch] = useState("");
-  const [filter, setFilter] = useState("all");
+  const navigate = useNavigate();
+  const { plans, loading, error, deletePlan } = usePlans();
 
-  const filtered = plans.filter((p) => {
-    const matchSearch = p.original_filename
-      .toLowerCase()
-      .includes(search.toLowerCase());
-    const matchFilter = filter === "all" || p.status === filter;
-    return matchSearch && matchFilter;
-  });
+  const handleDelete = async (e, projectId) => {
+    e.stopPropagation();
+    if (!window.confirm("Delete this floor plan? This cannot be undone.")) return;
+    try {
+      await deletePlan(projectId);
+      toast.success("Floor plan deleted.");
+    } catch (err) {
+      toast.error(err.message || "Delete failed.");
+    }
+  };
 
-  const readyPlans = plans.filter((p) => p.status === "ready");
-  const totalArea = readyPlans.reduce(
-    (s, p) => s + (p.total_floor_area_sqm || 0),
-    0,
-  );
-  const totalDoors = readyPlans.reduce((s, p) => s + (p.door_count || 0), 0);
-  const totalWins = readyPlans.reduce((s, p) => s + (p.window_count || 0), 0);
-
-  const handleDelete = (id) => {
-    setPlans((ps) => ps.filter((p) => p.id !== id));
+  const handleCopyShareLink = (e, shareToken) => {
+    e.stopPropagation();
+    if (!shareToken) {
+      toast.error("Share link not available yet.");
+      return;
+    }
+    const url = `${window.location.origin}/client/${shareToken}`;
+    navigator.clipboard.writeText(url);
+    toast.success("Share link copied.");
   };
 
   return (
     <PageWrapper>
-      <div className="max-w-[1600px] mx-auto px-4 lg:px-8 py-8 space-y-10">
-        {/* Page header  */}
-        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
-          <div>
-            <p className="label-mono text-bronze-DEFAULT mb-1">DASHBOARD</p>
+      <div className="max-w-[1600px] mx-auto px-6 lg:px-10 py-10">
+
+        {/* Page header */}
+        <div className="mb-10 flex items-end justify-between">
+          <div className="space-y-1">
+            <p
+              className="label-mono text-bronze-DEFAULT"
+              style={{ fontFamily: "'Saira', sans-serif" }}
+            >
+              Your Projects
+            </p>
             <h1
               className="font-display text-display-lg text-stone-900"
               style={{ fontFamily: "'Saira', sans-serif" }}
             >
-              Good morning, {MOCK_USER.name.split(" ")[0]}.
+              Dashboard
             </h1>
+          </div>
+          <button
+            onClick={() => navigate("/upload")}
+            className="btn-primary flex items-center gap-2"
+          >
+            <Plus size={14} />
+            New Analysis
+          </button>
+        </div>
+
+        {/* Loading state */}
+        {loading && (
+          <div className="py-20 text-center">
             <p
-              className="text-sm text-stone-500 mt-1"
+              className="text-sm text-stone-400"
               style={{ fontFamily: "'Fredoka', sans-serif" }}
             >
-              {readyPlans.length} floor plan{readyPlans.length !== 1 ? "s" : ""}{" "}
-              analysed
+              Loading your floor plans...
             </p>
           </div>
-          <Link to="/upload" className="btn-primary self-start sm:self-auto">
-            <Plus size={15} />
-            Upload floor plan
-          </Link>
-        </div>
+        )}
 
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <StatCard
-            label="Total Plans"
-            value={plans.length}
-            icon={FileImage}
-            accent
-          />
-          <StatCard
-            label="Total Area"
-            value={totalArea.toFixed(1)}
-            unit="m²"
-            icon={TrendingUp}
-          />
-          <StatCard
-            label="Doors detected"
-            value={totalDoors}
-            icon={DoorOpen}
-            sub={`across ${readyPlans.length} plans`}
-          />
-          <StatCard
-            label="Windows detected"
-            value={totalWins}
-            icon={Square}
-            sub={`across ${readyPlans.length} plans`}
-          />
-        </div>
-
-        {/* ── Filter / Search bar ───────────────────────────────────── */}
-        <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
-          <div className="relative w-full sm:w-80">
-            <Search
-              size={14}
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400"
-            />
-            <input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search plans…"
-              className="input-field pl-9 py-2.5 text-base"
+        {/* Error state */}
+        {!loading && error && (
+          <div className="px-4 py-3 bg-red-50 border border-red-200 rounded-sm">
+            <p
+              className="text-sm text-red-700"
               style={{ fontFamily: "'Fredoka', sans-serif" }}
-            />
+            >
+              {error}
+            </p>
           </div>
+        )}
 
-          <div className="flex items-center gap-3 flex-wrap">
-            <div className="flex items-center gap-1 bg-stone-100 rounded-sm p-1">
-              {["all", "ready", "processing", "error"].map((s) => (
-                <button
-                  key={s}
-                  onClick={() => setFilter(s)}
-                  className={`px-4 py-1.5 font-mono text-xs rounded-sm transition-all
-                    ${
-                      filter === s
-                        ? "bg-white text-stone-800 shadow-warm-sm"
-                        : "text-stone-500 hover:text-stone-700"
-                    }`}
+        {/* Empty state */}
+        {!loading && !error && plans.length === 0 && (
+          <div className="py-20 text-center border border-dashed border-stone-300 rounded-md">
+            <p
+              className="text-sm text-stone-500 mb-4"
+              style={{ fontFamily: "'Fredoka', sans-serif" }}
+            >
+              No floor plans yet. Upload your first one to get started.
+            </p>
+            <button onClick={() => navigate("/upload")} className="btn-primary">
+              Upload a floor plan
+            </button>
+          </div>
+        )}
+
+        {/* Plan grid */}
+        {!loading && !error && plans.length > 0 && (
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
+            {plans.map((plan) => {
+              const pid = plan.project_id ?? plan.id;
+              const statusInfo = STATUS_STYLES[plan.status] || STATUS_STYLES.processing;
+
+              return (
+                <div
+                  key={pid}
+                  onClick={() => navigate(`/result/${pid}`)}
+                  className="card p-5 space-y-4 cursor-pointer hover:border-bronze-DEFAULT
+                             border border-stone-200 rounded-md transition-colors"
                 >
-                  {s}
-                </button>
-              ))}
-            </div>
+                  <div className="flex items-start justify-between">
+                    <div className="space-y-0.5 min-w-0">
+                      <p
+                        className="text-sm font-medium text-stone-800 truncate"
+                        style={{ fontFamily: "'Saira', sans-serif" }}
+                      >
+                        {plan.project_name || plan.original_filename || "Untitled Project"}
+                      </p>
+                      <p className="font-mono text-xs text-stone-400">{pid}</p>
+                    </div>
+                    <span
+                      className={`text-xs px-2 py-0.5 rounded-full border flex-shrink-0 ${statusInfo.className}`}
+                      style={{ fontFamily: "'Fredoka', sans-serif" }}
+                    >
+                      {statusInfo.label}
+                    </span>
+                  </div>
 
-            <div className="flex items-center gap-1 bg-stone-100 rounded-sm p-1">
-              <button
-                onClick={() => setView("grid")}
-                className={`p-2 rounded-sm transition-all
-                  ${view === "grid" ? "bg-white shadow-warm-sm text-stone-800" : "text-stone-400 hover:text-stone-700"}`}
-              >
-                <LayoutGrid size={15} />
-              </button>
-              <button
-                onClick={() => setView("list")}
-                className={`p-2 rounded-sm transition-all
-                  ${view === "list" ? "bg-white shadow-warm-sm text-stone-800" : "text-stone-400 hover:text-stone-700"}`}
-              >
-                <List size={15} />
-              </button>
-            </div>
-          </div>
-        </div>
+                  <div className="grid grid-cols-3 gap-2 py-2 border-y border-stone-100">
+                    <div>
+                      <p className="font-mono text-sm text-stone-700">{plan.room_count ?? "–"}</p>
+                      <p className="text-[10px] text-stone-400 uppercase tracking-wide">Rooms</p>
+                    </div>
+                    <div>
+                      <p className="font-mono text-sm text-stone-700">
+                        {plan.total_area_sqft != null ? `${plan.total_area_sqft}` : "–"}
+                      </p>
+                      <p className="text-[10px] text-stone-400 uppercase tracking-wide">Sq.Ft</p>
+                    </div>
+                    <div>
+                      <p className="font-mono text-sm text-stone-700">
+                        {(plan.door_count ?? 0) + (plan.window_count ?? 0)}
+                      </p>
+                      <p className="text-[10px] text-stone-400 uppercase tracking-wide">Openings</p>
+                    </div>
+                  </div>
 
-        {/* ── Plans grid / list ─────────────────────────────────────── */}
-        {filtered.length === 0 ? (
-          <EmptyState
-            icon={FileImage}
-            title="No floor plans found."
-            description={
-              search
-                ? `No results for "${search}". Try a different search.`
-                : "Upload your first floor plan to get started."
-            }
-            action={
-              <Link to="/upload" className="btn-primary">
-                <Plus size={14} /> Upload a floor plan
-              </Link>
-            }
-          />
-        ) : (
-          <div
-            className={
-              view === "grid"
-                ? "grid sm:grid-cols-2 lg:grid-cols-3 gap-5"
-                : "space-y-3"
-            }
-          >
-            {filtered.map((plan) => (
-              <PlanCard key={plan.id} plan={plan} onDelete={handleDelete} />
-            ))}
+                  <div className="flex items-center justify-between">
+                    <button
+                      onClick={(e) => handleCopyShareLink(e, plan.share_token)}
+                      className="text-xs text-stone-500 hover:text-bronze-DEFAULT
+                                 flex items-center gap-1"
+                    >
+                      <Copy size={12} />
+                      Share link
+                    </button>
+                    <div className="flex items-center gap-3">
+                      <ExternalLink size={14} className="text-stone-400" />
+                      <button
+                        onClick={(e) => handleDelete(e, pid)}
+                        className="text-stone-400 hover:text-red-600"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
