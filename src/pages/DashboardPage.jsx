@@ -73,7 +73,8 @@ export default function DashboardPage() {
           </div>
           <button
             onClick={() => navigate("/upload")}
-            className="btn-primary flex items-center gap-2"
+            className="btn-primary flex items-center gap-2 text-md"
+            style={{fontFamily: "'Fredoka', sans-serif" }}
           >
             <Plus size={14} />
             New Analysis
@@ -113,7 +114,7 @@ export default function DashboardPage() {
             >
               No floor plans yet. Upload your first one to get started.
             </p>
-            <button onClick={() => navigate("/upload")} className="btn-primary">
+            <button onClick={() => navigate("/upload")} className="btn-primary" style={{ fontFamily: "'Fredoka', sans-serif" }}>
               Upload a floor plan
             </button>
           </div>
@@ -136,12 +137,12 @@ export default function DashboardPage() {
                   <div className="flex items-start justify-between">
                     <div className="space-y-0.5 min-w-0">
                       <p
-                        className="text-sm font-medium text-stone-800 truncate"
+                        className="text-md font-medium text-stone-800 truncate"
                         style={{ fontFamily: "'Saira', sans-serif" }}
                       >
                         {plan.project_name || plan.original_filename || "Untitled Project"}
                       </p>
-                      <p className="font-mono text-xs text-stone-400">{pid}</p>
+                      <p className="font-mono text-sm text-stone-400">{pid}</p>
                     </div>
                     <span
                       className={`text-xs px-2 py-0.5 rounded-full border flex-shrink-0 ${statusInfo.className}`}
@@ -160,13 +161,13 @@ export default function DashboardPage() {
                       <p className="font-mono text-sm text-stone-700">
                         {plan.total_area_sqft != null ? `${plan.total_area_sqft}` : "–"}
                       </p>
-                      <p className="text-[10px] text-stone-400 uppercase tracking-wide">Sq.Ft</p>
+                      <p className="text-[10px] text-stone-400 uppercase tracking-wide">Total Area</p>
                     </div>
                     <div>
                       <p className="font-mono text-sm text-stone-700">
-                        {(plan.door_count ?? 0) + (plan.window_count ?? 0)}
+                        {plan.door_count ?? 0} , {plan.window_count ?? 0}
                       </p>
-                      <p className="text-[10px] text-stone-400 uppercase tracking-wide">Openings</p>
+                      <p className="text-[10px] text-stone-400 uppercase tracking-wide">Doors & Windows</p>
                     </div>
                   </div>
 

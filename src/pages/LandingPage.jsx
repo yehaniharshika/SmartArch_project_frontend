@@ -195,7 +195,7 @@ export default function LandingPage() {
                       className="text-stone-300 text-sm mt-1"
                       style={{ fontFamily: "'Fredoka', sans-serif" }}
                     >
-                      Real-time AI Detection
+                       
                     </p>
                   </div>
 
