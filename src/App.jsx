@@ -18,6 +18,7 @@ export default function App() {
         <Route path="/upload"    element={<UploadPage />} />
         <Route path="/result/:projectId" element={<ResultPage />} />
         <Route path="/chat/:token" element={<ChatPage />} />
+        <Route path="/client/:token" element={<ChatPage />} />
         <Route path="*"          element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>

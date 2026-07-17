@@ -1,11 +1,13 @@
 import { configureStore } from "@reduxjs/toolkit";
 import userSlice from "../reducers/UserSlice.js";
-import floorPlanSlice from "../reducers/FloorPlanSlice.js";                               
+import floorPlanSlice from "../reducers/FloorPlanSlice.js";  
+import chatSlice from "../reducers/ChatSlice.js";                             
 
 export const store = configureStore({
   reducer: {
     user: userSlice,
     floorPlan: floorPlanSlice,
+    chat: chatSlice,
   },
 });
 export default store;
