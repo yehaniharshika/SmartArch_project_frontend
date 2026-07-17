@@ -74,7 +74,7 @@ export default function Navbar({ transparent = false }) {
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
           <Link to="/" className="flex items-center gap-3 group flex-shrink-0">
-            <img src={smartArchLogo} alt="SmartArch" className="h-10 w-auto" />
+            <img src={smartArchLogo} alt="SmartArch" className="h-14 w-auto" />
           </Link>
 
           {/* Desktop Nav */}
@@ -83,7 +83,7 @@ export default function Navbar({ transparent = false }) {
               <a
                 key={link.label}
                 href={link.href}
-                className={`flex items-center gap-1.5 px-4 py-2 font-sans text-lg rounded-sm
+                className={`flex items-center gap-1.5 px-4 py-2 font-sans text-[15px] rounded-sm
                   transition-colors duration-150 whitespace-nowrap
                   ${
                     location.pathname === link.href
