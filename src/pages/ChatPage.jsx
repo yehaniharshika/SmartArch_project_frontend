@@ -8,6 +8,7 @@ import SuggestionCard from "../components/chat/SuggestionCard.jsx";
 import Badge          from "../components/ui/Badge.jsx";
 import { usePlanByToken } from "../hooks/usePlans.js";
 import { sendChatMessage, addUserMessage, addBotMessage, resetChat } from "../reducers/ChatSlice.js";
+import SmartArchLogo from "../assets/SmartArch-logo.png";
 
 const SUGGESTIONS = [
   { icon: Ruler,      text: "What is the total floor area of the plan?" },
