@@ -20,15 +20,10 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import { planApi } from "../api/planApi.js";
 
-// ── Async Thunks ─────────────────────────────────────────────────────────────
+// Async Thunks
 
 /**
  * uploadFloorPlan
- * Uploads the file + starts the backend analysis pipeline.
- * The backend runs synchronously (YOLO → OCR → rooms → save),
- * so a single POST returns the full result when done — there is no
- * separate "poll for status" step.
- *
  * @param {{projectName: string, file: File}} payload
  */
 export const uploadFloorPlan = createAsyncThunk(
@@ -49,9 +44,9 @@ export const uploadFloorPlan = createAsyncThunk(
       let step = 1;
       dispatch(floorPlanSlice.actions.setPipelineStep(step));
       const stepTimer = setInterval(() => {
-        step = Math.min(step + 1, 8);  // hold at step 8 until response arrives
+        step = Math.min(step + 1, 8); // hold at step 8 until response arrives
         dispatch(floorPlanSlice.actions.setPipelineStep(step));
-      }, 3500);  // backend pipeline typically takes ~30-90s
+      }, 3500); // backend pipeline typically takes ~30-90s
 
       const response = await planApi.upload(projectName, file, (pct) => {
         dispatch(floorPlanSlice.actions.setUploadProgress(pct));
@@ -65,8 +60,7 @@ export const uploadFloorPlan = createAsyncThunk(
       }
 
       dispatch(floorPlanSlice.actions.setPipelineStep(9));
-      return response.data;   // AnalysisResultDTO.to_dict() + project_id/share_token/etc.
-
+      return response.data; // AnalysisResultDTO.to_dict() + project_id/share_token/etc.
     } catch (err) {
       dispatch(floorPlanSlice.actions.setPipelineStep(0));
       const msg =
@@ -78,10 +72,7 @@ export const uploadFloorPlan = createAsyncThunk(
   }
 );
 
-/**
- * fetchMyPlans
- * Load the logged-in user's plan list for the dashboard.
- */
+/* fetchMyPlans */
 export const fetchMyPlans = createAsyncThunk(
   "floorPlan/fetchMyPlans",
   async (_, { rejectWithValue }) => {
@@ -99,10 +90,7 @@ export const fetchMyPlans = createAsyncThunk(
   }
 );
 
-/**
- * fetchPlanById
- * Load a single plan's full result (e.g. from result page).
- */
+/* fetchPlanById */
 export const fetchPlanById = createAsyncThunk(
   "floorPlan/fetchById",
   async (projectId, { rejectWithValue }) => {
@@ -132,7 +120,7 @@ export const deletePlan = createAsyncThunk(
       if (!response.success) {
         return rejectWithValue(response.message || "Delete failed.");
       }
-      return projectId;  // return id so the reducer can remove it from the list
+      return projectId; // return id so the reducer can remove it from the list
     } catch (err) {
       return rejectWithValue(
         err?.response?.data?.message || err?.message || "Delete failed."
@@ -146,13 +134,13 @@ export const deletePlan = createAsyncThunk(
 const floorPlanSlice = createSlice({
   name: "floorPlan",
   initialState: {
-    plans:          [],
-    currentPlan:    null,
-    uploadStatus:   "idle",    // "idle" | "uploading" | "analysing" | "done" | "error"
+    plans: [],
+    currentPlan: null,
+    uploadStatus: "idle", // "idle" | "uploading" | "analysing" | "done" | "error"
     uploadProgress: 0,
-    pipelineStep:   0,
-    plansStatus:    "idle",    // "idle" | "loading" | "done" | "error"
-    error:          null,
+    pipelineStep: 0,
+    plansStatus: "idle", // "idle" | "loading" | "done" | "error"
+    error: null,
   },
   reducers: {
     // Advance the pipeline animation step (0-9)
@@ -168,10 +156,10 @@ const floorPlanSlice = createSlice({
     },
     // Reset upload state (e.g. when navigating away from upload page)
     resetUpload: (state) => {
-      state.uploadStatus   = "idle";
+      state.uploadStatus = "idle";
       state.uploadProgress = 0;
-      state.pipelineStep   = 0;
-      state.error          = null;
+      state.pipelineStep = 0;
+      state.error = null;
     },
     // Clear current plan (e.g. when leaving result page)
     clearCurrentPlan: (state) => {
@@ -179,21 +167,20 @@ const floorPlanSlice = createSlice({
     },
   },
   extraReducers: (builder) => {
-
     // ── uploadFloorPlan ────────────────────────────────────────────────────
     builder
       .addCase(uploadFloorPlan.pending, (state) => {
-        state.uploadStatus   = "uploading";
+        state.uploadStatus = "uploading";
         state.uploadProgress = 0;
-        state.pipelineStep   = 0;
-        state.error          = null;
-        state.currentPlan    = null;
+        state.pipelineStep = 0;
+        state.error = null;
+        state.currentPlan = null;
       })
       .addCase(uploadFloorPlan.fulfilled, (state, action) => {
-        state.uploadStatus   = "done";
+        state.uploadStatus = "done";
         state.uploadProgress = 100;
-        state.pipelineStep   = 9;
-        state.currentPlan    = action.payload;
+        state.pipelineStep = 9;
+        state.currentPlan = action.payload;
         // Add to plan list if not already there
         const exists = state.plans.some(
           (p) => p.project_id === action.payload.project_id
@@ -204,11 +191,11 @@ const floorPlanSlice = createSlice({
       })
       .addCase(uploadFloorPlan.rejected, (state, action) => {
         state.uploadStatus = "error";
-        state.error        = action.payload;
+        state.error = action.payload;
         state.pipelineStep = 0;
       });
 
-    // fetchMyPlans 
+    // fetchMyPlans
     builder
       .addCase(fetchMyPlans.pending, (state) => {
         state.plansStatus = "loading";
@@ -223,8 +210,15 @@ const floorPlanSlice = createSlice({
         state.error = action.payload;
       });
 
-    // fetchPlanById 
+    // fetchPlanById
     builder
+      .addCase(fetchPlanById.pending, (state) => {
+        // Clear stale plan + error before loading a new project, so
+        // usePlan()'s loading flag (!plan && !error) is accurate and
+        // the page doesn't flash the *previous* project's data.
+        state.currentPlan = null;
+        state.error = null;
+      })
       .addCase(fetchPlanById.fulfilled, (state, action) => {
         state.currentPlan = action.payload;
       })
@@ -232,7 +226,7 @@ const floorPlanSlice = createSlice({
         state.error = action.payload;
       });
 
-    // deletePlan 
+    // deletePlan
     builder
       .addCase(deletePlan.fulfilled, (state, action) => {
         state.plans = state.plans.filter(
@@ -248,12 +242,7 @@ const floorPlanSlice = createSlice({
   },
 });
 
-
-export const {
-  setPipelineStep,
-  setUploadProgress,
-  resetUpload,
-  clearCurrentPlan,
-} = floorPlanSlice.actions;
+export const { setPipelineStep, setUploadProgress, resetUpload, clearCurrentPlan } =
+  floorPlanSlice.actions;
 
 export default floorPlanSlice.reducer;
