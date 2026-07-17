@@ -16,7 +16,7 @@ export default function App() {
         <Route path="/register"  element={<RegisterPage />} />
         <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/upload"    element={<UploadPage />} />
-        <Route path="/result/:id" element={<ResultPage />} />
+        <Route path="/result/:projectId" element={<ResultPage />} />
         <Route path="/chat/:token" element={<ChatPage />} />
         <Route path="*"          element={<Navigate to="/" replace />} />
       </Routes>

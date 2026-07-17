@@ -86,6 +86,9 @@ module.exports = {
         glow: "0 0 0 3px rgba(30,111,217,0.18)",
         "warm-sm": "0 1px 2px rgba(15,23,41,0.06)",
       },
+      screens: {
+        "xs": "400px",
+      },
     },
   },
   plugins: [],

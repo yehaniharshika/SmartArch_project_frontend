@@ -3,13 +3,11 @@ import { CheckCircle2, Loader2, Circle } from "lucide-react";
 const STEPS = [
   { id: 1, label: "Saving file",            sub: "Storing your floor plan securely" },
   { id: 2, label: "PDF conversion",         sub: "Converting to high-res image" },
-  { id: 3, label: "OCR extraction",         sub: "Reading text & dimensions" },
-  { id: 4, label: "Scale detection",        sub: "Calculating pixel-to-meter ratio" },
-  { id: 5, label: "YOLOv8 detection",       sub: "Identifying rooms, doors & windows" },
-  { id: 6, label: "Area calculation",       sub: "Computing floor areas" },
-  { id: 7, label: "GPT-4o vision",          sub: "Deep architectural analysis" },
-  { id: 8, label: "Saving results",         sub: "Persisting to database" },
-  { id: 9, label: "Generating share link",  sub: "Creating client chatbot URL" },
+  { id: 3, label: "YOLOv8 detection",       sub: "Identifying rooms, doors & windows" },
+  { id: 4, label: "OCR extraction",         sub: "Reading text & dimensions" },
+  { id: 5, label: "Area calculation",       sub: "Computing floor areas" },
+  { id: 6, label: "Saving results",         sub: "Persisting to database" },
+  { id: 7, label: "Generating share link",  sub: "Creating client chatbot URL" },
 ];
 
 export default function AnalysisPipelineProgress({ currentStep = 0, done = false }) {
@@ -43,17 +41,17 @@ export default function AnalysisPipelineProgress({ currentStep = 0, done = false
 
             {/* Label */}
             <div className="flex-1 min-w-0">
-              <p className={`font-sans text-sm leading-none
+              <p className={`font-sans text-md leading-none
                 ${isActive ? "text-stone-800 font-medium" : "text-stone-500"}`}>
                 {step.label}
               </p>
               {isActive && (
-                <p className="font-mono text-xs text-stone-400 mt-1">{step.sub}</p>
+                <p className="font-mono text-sm text-stone-400 mt-1">{step.sub}</p>
               )}
             </div>
 
             {/* Step number */}
-            <span className="font-mono text-xs text-stone-300 flex-shrink-0">
+            <span className="font-mono text-sm text-stone-300 flex-shrink-0">
               {String(step.id).padStart(2, "0")}
             </span>
           </div>

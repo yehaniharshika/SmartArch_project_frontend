@@ -1,28 +1,35 @@
 import { useNavigate } from "react-router-dom";
+import { motion } from "framer-motion";
 import toast from "react-hot-toast";
-import { Trash2, ExternalLink, Copy, Plus } from "lucide-react";
+import { Trash2, ExternalLink, Copy, Plus, Home, Ruler, DoorOpen } from "lucide-react";
 import PageWrapper from "../components/layout/PageWrapper.jsx";
 import { usePlans } from "../hooks/usePlans.js";
-
-/**
- * NOTE: This file was not part of the originally supplied frontend code —
- * it is built from scratch here, matching the visual conventions used in
- * UploadPage.jsx (PageWrapper, Saira/Fredoka fonts, stone/bronze palette).
- *
- * Field names read from each plan object (e.g. `plan.project_id`,
- * `plan.room_count`) assume the same key names FloorPlan_service.py uses
- * when building the upload response (AnalysisResultDTO.to_dict() +
- * project_id/project_name). The exact keys returned by
- * `FloorPlan_entity.to_dict()` for the /my-plans list endpoint were not
- * available when writing this file — confirm they match, or adjust the
- * `pid`/field lookups below if your entity uses different key names
- * (e.g. "id" instead of "project_id").
- */
 
 const STATUS_STYLES = {
   ready:      { label: "Ready",      className: "bg-green-50 text-green-700 border-green-200" },
   processing: { label: "Processing", className: "bg-amber-50 text-amber-700 border-amber-200" },
   error:      { label: "Error",      className: "bg-red-50 text-red-700 border-red-200" },
+};
+
+// ── Animation variants ──────────────────────────────────────────
+// Parent grid staggers each card in one after another; each card
+// itself rises + fades in. Kept subtle (12px rise, 0.35s) so it
+// reads as "settling into place" rather than a flashy entrance —
+// matching the restrained tone of the rest of the app.
+const gridVariants = {
+  hidden: {},
+  show: {
+    transition: { staggerChildren: 0.07 },
+  },
+};
+
+const cardVariants = {
+  hidden: { opacity: 0, y: 14 },
+  show: {
+    opacity: 1,
+    y: 0,
+    transition: { duration: 0.35, ease: [0.16, 1, 0.3, 1] },
+  },
 };
 
 export default function DashboardPage() {
@@ -73,8 +80,8 @@ export default function DashboardPage() {
           </div>
           <button
             onClick={() => navigate("/upload")}
-            className="btn-primary flex items-center gap-2 text-md"
-            style={{fontFamily: "'Fredoka', sans-serif" }}
+            className="btn-primary flex items-center gap-2 text-[16px]"
+            style={{ fontFamily: "'Fredoka', sans-serif", borderRadius: "6px" }}
           >
             <Plus size={14} />
             New Analysis
@@ -114,7 +121,11 @@ export default function DashboardPage() {
             >
               No floor plans yet. Upload your first one to get started.
             </p>
-            <button onClick={() => navigate("/upload")} className="btn-primary" style={{ fontFamily: "'Fredoka', sans-serif" }}>
+            <button
+              onClick={() => navigate("/upload")}
+              className="btn-primary"
+              style={{ fontFamily: "'Fredoka', sans-serif", borderRadius: "6px" }}
+            >
               Upload a floor plan
             </button>
           </div>
@@ -122,78 +133,140 @@ export default function DashboardPage() {
 
         {/* Plan grid */}
         {!loading && !error && plans.length > 0 && (
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
+          <motion.div
+            className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5"
+            variants={gridVariants}
+            initial="hidden"
+            animate="show"
+          >
             {plans.map((plan) => {
               const pid = plan.project_id ?? plan.id;
               const statusInfo = STATUS_STYLES[plan.status] || STATUS_STYLES.processing;
 
               return (
-                <div
+                <motion.div
                   key={pid}
+                  variants={cardVariants}
+                  whileHover={{ y: -3 }}
+                  transition={{ duration: 0.18, ease: "easeOut" }}
                   onClick={() => navigate(`/result/${pid}`)}
-                  className="card p-5 space-y-4 cursor-pointer hover:border-bronze-DEFAULT
-                             border border-stone-200 rounded-md transition-colors"
+                  /*
+                    Card restructured with a thin top accent strip in the
+                    same bronze-gradient family used on the login/register
+                    cards (--parchment → --bronze-light → --bronze), so the
+                    dashboard visually belongs to the same design system
+                    instead of using a plain white/stone-only card.
+                    overflow-hidden clips the strip's corners to match the
+                    card's rounded-md.
+                  */
+                  className="rounded-md bg-white border border-stone-200
+                             shadow-sm hover:shadow-md hover:border-bronze-light
+                             transition-colors duration-200 cursor-pointer
+                             overflow-hidden"
                 >
-                  <div className="flex items-start justify-between">
-                    <div className="space-y-0.5 min-w-0">
-                      <p
-                        className="text-md font-medium text-stone-800 truncate"
-                        style={{ fontFamily: "'Saira', sans-serif" }}
+                  
+
+                  <div className="p-5 space-y-4">
+                    <div className="flex items-start justify-between">
+                      <div className="space-y-0.5 min-w-0">
+                        <p
+                          className="text-md font-medium text-stone-800 truncate"
+                          style={{ fontFamily: "'Saira', sans-serif" }}
+                        >
+                          {plan.project_name || plan.original_filename || "Untitled Project"}
+                        </p>
+                        <p className="font-mono text-sm text-stone-400">{pid}</p>
+                      </div>
+                      <span
+                        className={`text-xs px-2 py-0.5 rounded-full border flex-shrink-0 ${statusInfo.className}`}
+                        style={{ fontFamily: "'Fredoka', sans-serif" }}
                       >
-                        {plan.project_name || plan.original_filename || "Untitled Project"}
-                      </p>
-                      <p className="font-mono text-sm text-stone-400">{pid}</p>
+                        {statusInfo.label}
+                      </span>
                     </div>
-                    <span
-                      className={`text-xs px-2 py-0.5 rounded-full border flex-shrink-0 ${statusInfo.className}`}
-                      style={{ fontFamily: "'Fredoka', sans-serif" }}
-                    >
-                      {statusInfo.label}
-                    </span>
-                  </div>
 
-                  <div className="grid grid-cols-3 gap-2 py-2 border-y border-stone-100">
-                    <div>
-                      <p className="font-mono text-sm text-stone-700">{plan.room_count ?? "–"}</p>
-                      <p className="text-[10px] text-stone-400 uppercase tracking-wide">Rooms</p>
-                    </div>
-                    <div>
-                      <p className="font-mono text-sm text-stone-700">
-                        {plan.total_area_sqft != null ? `${plan.total_area_sqft}` : "–"}
-                      </p>
-                      <p className="text-[10px] text-stone-400 uppercase tracking-wide">Total Area</p>
-                    </div>
-                    <div>
-                      <p className="font-mono text-sm text-stone-700">
-                        {plan.door_count ?? 0} , {plan.window_count ?? 0}
-                      </p>
-                      <p className="text-[10px] text-stone-400 uppercase tracking-wide">Doors & Windows</p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-between">
-                    <button
-                      onClick={(e) => handleCopyShareLink(e, plan.share_token)}
-                      className="text-xs text-stone-500 hover:text-bronze-DEFAULT
-                                 flex items-center gap-1"
+                    {/*
+                      Stats row — tinted parchment background instead of
+                      plain white, with bronze icon chips per stat so the
+                      numbers read as "belonging" to the palette rather
+                      than sitting in neutral stone-700 on white.
+                    */}
+                    <div
+                      className="grid grid-cols-3 gap-2 py-3 px-2 rounded-sm"
+                      style={{ backgroundColor: "var(--parchment)" }}
                     >
-                      <Copy size={12} />
-                      Share link
-                    </button>
-                    <div className="flex items-center gap-3">
-                      <ExternalLink size={14} className="text-stone-400" />
+                      <div className="flex flex-col items-center gap-1 text-center">
+                        <div
+                          className="w-6 h-6 rounded-full flex items-center justify-center"
+                          style={{ backgroundColor: "var(--bronze-light)" }}
+                        >
+                          <Home size={12} className="text-white" />
+                        </div>
+                        <p className="font-mono text-sm" style={{ color: "var(--ink-muted)" }}>
+                          {plan.room_count ?? "–"}
+                        </p>
+                        <p className="text-[10px] uppercase tracking-wide" style={{ color: "var(--ink-faint)" }}>
+                          Rooms
+                        </p>
+                      </div>
+
+                      <div className="flex flex-col items-center gap-1 text-center border-x" style={{ borderColor: "var(--warm)" }}>
+                        <div
+                          className="w-6 h-6 rounded-full flex items-center justify-center"
+                          style={{ backgroundColor: "var(--bronze-light)" }}
+                        >
+                          <Ruler size={12} className="text-white" />
+                        </div>
+                        <p className="font-mono text-sm" style={{ color: "var(--ink-muted)" }}>
+                          {plan.total_area_sqft != null ? `${plan.total_area_sqft}` : "–"}
+                        </p>
+                        <p className="text-[10px] uppercase tracking-wide" style={{ color: "var(--ink-faint)" }}>
+                          Total Area
+                        </p>
+                      </div>
+
+                      <div className="flex flex-col items-center gap-1 text-center">
+                        <div
+                          className="w-6 h-6 rounded-full flex items-center justify-center"
+                          style={{ backgroundColor: "var(--bronze-light)" }}
+                        >
+                          <DoorOpen size={12} className="text-white" />
+                        </div>
+                        <p className="font-mono text-sm" style={{ color: "var(--ink-muted)" }}>
+                          {plan.door_count ?? 0} · {plan.window_count ?? 0}
+                        </p>
+                        <p className="text-[10px] uppercase tracking-wide" style={{ color: "var(--ink-faint)" }}>
+                          Doors & Windows
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between">
                       <button
-                        onClick={(e) => handleDelete(e, pid)}
-                        className="text-stone-400 hover:text-red-600"
+                        onClick={(e) => handleCopyShareLink(e, plan.share_token)}
+                        className="text-sm flex items-center gap-1 transition-colors"
+                        style={{ color: "var(--ink-faint)" }}
+                        onMouseEnter={(e) => (e.currentTarget.style.color = "var(--bronze)")}
+                        onMouseLeave={(e) => (e.currentTarget.style.color = "var(--ink-faint)")}
                       >
-                        <Trash2 size={14} />
+                        <Copy size={12} />
+                        Share link
                       </button>
+                      <div className="flex items-center gap-3">
+                        <ExternalLink size={16} className="text-stone-400" />
+                        <button
+                          onClick={(e) => handleDelete(e, pid)}
+                          className="text-stone-400 hover:text-red-600 transition-colors"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
                     </div>
                   </div>
-                </div>
+                </motion.div>
               );
             })}
-          </div>
+          </motion.div>
         )}
       </div>
     </PageWrapper>
