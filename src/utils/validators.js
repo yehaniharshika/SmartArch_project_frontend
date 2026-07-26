@@ -1,11 +1,7 @@
-/**
- * SmartArch — Validators
- */
-
 export const validators = {
   email: (v) => {
     if (!v) return "Email is required.";
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) return "Enter a valid email address.";
+    if (!/^[^\s@]+@gmail\.com$/i.test(v)) return "Please enter valid email address.";
     return null;
   },
   password: (v) => {
@@ -14,7 +10,7 @@ export const validators = {
     return null;
   },
   name: (v) => {
-    if (!v || v.trim().length < 2) return "Name must be at least 2 characters.";
+    if (!v || v.trim().length < 2) return "Plase enter a valid name.";
     return null;
   },
   required: (label) => (v) => {
@@ -26,8 +22,8 @@ export const validators = {
 /** Run multiple validators on a form object. Returns { field: errorMsg } */
 export function validateForm(fields, rules) {
   const errors = {};
-  for (const [field, validators] of Object.entries(rules)) {
-    for (const validate of validators) {
+  for (const [field, fieldValidators] of Object.entries(rules)) {
+    for (const validate of fieldValidators) {
       const err = validate(fields[field]);
       if (err) { errors[field] = err; break; }
     }
