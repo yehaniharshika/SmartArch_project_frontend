@@ -1,8 +1,10 @@
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import toast from "react-hot-toast";
 import { Trash2, ExternalLink, Copy, Plus, Home, Ruler, DoorOpen } from "lucide-react";
 import PageWrapper from "../components/layout/PageWrapper.jsx";
+import ConfirmDialog from "../components/ui/ConfirmDialog.jsx";
 import { usePlans } from "../hooks/usePlans.js";
 
 const STATUS_STYLES = {
@@ -12,10 +14,6 @@ const STATUS_STYLES = {
 };
 
 // ── Animation variants ──────────────────────────────────────────
-// Parent grid staggers each card in one after another; each card
-// itself rises + fades in. Kept subtle (12px rise, 0.35s) so it
-// reads as "settling into place" rather than a flashy entrance —
-// matching the restrained tone of the rest of the app.
 const gridVariants = {
   hidden: {},
   show: {
@@ -36,9 +34,23 @@ export default function DashboardPage() {
   const navigate = useNavigate();
   const { plans, loading, error, deletePlan } = usePlans();
 
-  const handleDelete = async (e, projectId) => {
+  // Tracks which project the delete-confirmation dialog is currently
+  // targeting. null = dialog closed. Holding the id (not a boolean)
+  // means the correct card gets deleted even if the list re-renders
+  // between opening the dialog and confirming.
+  const [pendingDeleteId, setPendingDeleteId] = useState(null);
+
+  const handleRequestDelete = (e, projectId) => {
     e.stopPropagation();
-    if (!window.confirm("Delete this floor plan? This cannot be undone.")) return;
+    setPendingDeleteId(projectId);
+  };
+
+  const handleCancelDelete = () => setPendingDeleteId(null);
+
+  const handleConfirmDelete = async () => {
+    const projectId = pendingDeleteId;
+    setPendingDeleteId(null);
+    if (!projectId) return;
     try {
       await deletePlan(projectId);
       toast.success("Floor plan deleted.");
@@ -150,22 +162,11 @@ export default function DashboardPage() {
                   whileHover={{ y: -3 }}
                   transition={{ duration: 0.18, ease: "easeOut" }}
                   onClick={() => navigate(`/result/${pid}`)}
-                  /*
-                    Card restructured with a thin top accent strip in the
-                    same bronze-gradient family used on the login/register
-                    cards (--parchment → --bronze-light → --bronze), so the
-                    dashboard visually belongs to the same design system
-                    instead of using a plain white/stone-only card.
-                    overflow-hidden clips the strip's corners to match the
-                    card's rounded-md.
-                  */
                   className="rounded-md bg-white border border-stone-200
                              shadow-sm hover:shadow-md hover:border-bronze-light
                              transition-colors duration-200 cursor-pointer
                              overflow-hidden"
                 >
-                  
-
                   <div className="p-5 space-y-4">
                     <div className="flex items-start justify-between">
                       <div className="space-y-0.5 min-w-0">
@@ -185,12 +186,6 @@ export default function DashboardPage() {
                       </span>
                     </div>
 
-                    {/*
-                      Stats row — tinted parchment background instead of
-                      plain white, with bronze icon chips per stat so the
-                      numbers read as "belonging" to the palette rather
-                      than sitting in neutral stone-700 on white.
-                    */}
                     <div
                       className="grid grid-cols-3 gap-2 py-3 px-2 rounded-sm"
                       style={{ backgroundColor: "var(--parchment)" }}
@@ -255,7 +250,7 @@ export default function DashboardPage() {
                       <div className="flex items-center gap-3">
                         <ExternalLink size={16} className="text-stone-400" />
                         <button
-                          onClick={(e) => handleDelete(e, pid)}
+                          onClick={(e) => handleRequestDelete(e, pid)}
                           className="text-stone-400 hover:text-red-600 transition-colors"
                         >
                           <Trash2 size={16} />
@@ -269,6 +264,16 @@ export default function DashboardPage() {
           </motion.div>
         )}
       </div>
+
+      <ConfirmDialog
+        open={pendingDeleteId !== null}
+        title="Delete this floor plan?"
+        message="This action cannot be undone. All detections, rooms, and chat history for this project will be permanently removed."
+        confirmLabel="Yes, delete"
+        cancelLabel="No, keep it"
+        onConfirm={handleConfirmDelete}
+        onCancel={handleCancelDelete}
+      />
     </PageWrapper>
   );
 }
