@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import smartArchLogo from "../../assets/SmartArch-logo.png";
 
 export default function Footer() {
   return (
@@ -9,8 +10,12 @@ export default function Footer() {
           {/* Brand Section - Left Side */}
           <div className="md:col-span-5">
             <div className="flex items-center gap-3 mb-4">
-              <div className="w-8 h-8 bg-bronze-DEFAULT rounded-sm flex items-center justify-center">
-                <span className="font-display text-white text-lg font-light">S</span>
+              <div className="w-14 h-14 bg-pink rounded-sm flex items-center justify-center">
+                <img 
+                  src={smartArchLogo} 
+                  alt="SmartArch Logo" 
+                  className="w-25 h-25"
+                />
               </div>
               <span 
                 className="font-display text-2xl text-arch-cream"

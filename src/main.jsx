@@ -14,7 +14,7 @@ createRoot(document.getElementById("root")).render(
         position="top-right"
         toastOptions={{
           style: {
-            fontFamily: "DM Sans, system-ui, sans-serif",
+            style: { fontFamily: "'Fredoka', sans-serif" },
             fontSize:   "0.875rem",
             background: "#2C2416",
             color:      "#FAF8F4",
