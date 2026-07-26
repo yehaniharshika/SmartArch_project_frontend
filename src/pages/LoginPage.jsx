@@ -8,6 +8,7 @@ import SmartArchLogo from "../assets/SmartArch-logo.png";
 import planImageOne from "../assets/img-01.jpg";
 import planImageTwo from "../assets/img-02.jpg";
 import { loginUser, clearError } from "../reducers/userSlice.js";
+import { validators, validateForm } from "../utils/validators.js";
 
 function PlanRevealAnimation() {
   const [stage, setStage] = useState("hold");
@@ -27,9 +28,6 @@ function PlanRevealAnimation() {
   const showReticles = stage === "done";
 
   return (
-    // Wider, shorter frame — max-width increased, aspect-ratio switched
-    // from a near-square 4:3.1 to a panoramic 16:9, so the plan reads
-    // as a wide architectural drawing rather than a tall photo crop.
     <div className="relative w-full mx-auto" style={{ maxWidth: "44rem" }}>
       <div
         className="relative overflow-hidden rounded-lg"
@@ -140,18 +138,30 @@ export default function LoginPage() {
   const { status } = useSelector((state) => state.user);
 
   const [form, setForm] = useState({ email: "", password: "" });
+  const [errors, setErrors] = useState({});
   const [show, setShow] = useState(false);
   const loading = status === "loading";
-  const handleChange = (e) =>
-    setForm((p) => ({ ...p, [e.target.name]: e.target.value }));
+
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setForm((p) => ({ ...p, [name]: value }));
+    if (errors[name]) setErrors((p) => ({ ...p, [name]: null }));
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!form.email || !form.password) {
-      toast.error("Please fill in all fields.");
+
+    const fieldErrors = validateForm(form, {
+      email: [validators.email],
+      password: [validators.required("Password")],
+    });
+
+    if (Object.keys(fieldErrors).length > 0) {
+      setErrors(fieldErrors);
       return;
     }
 
+    setErrors({});
     dispatch(clearError());
     const result = await dispatch(loginUser(form));
 
@@ -214,15 +224,6 @@ export default function LoginPage() {
 
       {/* ── Right panel — form ─────────────────────────────────────── */}
       <div className="flex-1 flex items-center justify-center px-6 py-12">
-        {/*
-          Card restructured: outer wrapper now holds ONLY the rounded
-          corners + shadow + overflow-hidden (so the top accent strip's
-          corners get clipped cleanly), no more full border-all-sides.
-          The accent-sweep strip (defined in index.css, using the same
-          bronze/parchment palette as the rest of the app) sits as the
-          first child, then all the original form content is nested
-          in an inner padded div.
-        */}
         <div className="w-full max-w-sm page-enter rounded-2xl shadow-lg bg-white overflow-hidden">
           <div className="accent-sweep h-1.5 w-full" />
 
@@ -250,7 +251,7 @@ export default function LoginPage() {
               </p>
             </div>
 
-            <form onSubmit={handleSubmit} className="space-y-5">
+            <form onSubmit={handleSubmit} noValidate className="space-y-5">
               <div className="space-y-1">
                 <label className="label-mono">Email Address</label>
                 <input
@@ -258,11 +259,18 @@ export default function LoginPage() {
                   name="email"
                   value={form.email}
                   onChange={handleChange}
-                  placeholder="you@studio.com"
-                  className="input-field text-[12px] sm:text-lg rounded-[12px]"
+                  placeholder="you@gmail.com"
+                  className={`input-field text-[12px] sm:text-lg rounded-[12px] ${
+                    errors.email ? "border-red-400 focus:border-red-400" : ""
+                  }`}
                   style={{ fontFamily: "'Fredoka', sans-serif" }}
                   autoComplete="email"
                 />
+                {errors.email && (
+                  <p className="text-xs text-red-500" style={{ fontFamily: "'Fredoka', sans-serif" }}>
+                    {errors.email}
+                  </p>
+                )}
               </div>
 
               <div className="space-y-1.5">
@@ -282,7 +290,9 @@ export default function LoginPage() {
                     value={form.password}
                     onChange={handleChange}
                     placeholder="••••••••"
-                    className="input-field text-[12px] sm:text-lg rounded-[12px]"
+                    className={`input-field text-[12px] sm:text-lg rounded-[12px] ${
+                      errors.password ? "border-red-400 focus:border-red-400" : ""
+                    }`}
                     style={{ fontFamily: "'Fredoka', sans-serif" }}
                     autoComplete="current-password"
                   />
@@ -295,6 +305,11 @@ export default function LoginPage() {
                     {show ? <EyeOff size={18} /> : <Eye size={18} />}
                   </button>
                 </div>
+                {errors.password && (
+                  <p className="text-xs text-red-500" style={{ fontFamily: "'Fredoka', sans-serif" }}>
+                    {errors.password}
+                  </p>
+                )}
               </div>
 
               <button

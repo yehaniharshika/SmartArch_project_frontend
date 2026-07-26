@@ -5,6 +5,7 @@ import { Eye, EyeOff, UserPlus, CheckCircle2 } from "lucide-react";
 import toast from "react-hot-toast";
 import SmartArchLogo from "../assets/SmartArch-logo.png";
 import { registerUser, clearError } from "../reducers/userSlice.js";
+import { validators, validateForm } from "../utils/validators.js";
 
 const PERKS = [
   "Upload unlimited floor plans",
@@ -25,29 +26,40 @@ export default function RegisterPage() {
     password: "",
     confirm: "",
   });
+  const [errors, setErrors] = useState({});
   const [show, setShow] = useState(false);
   const [visiblePerks, setVisiblePerks] = useState(0);
 
   const loading = status === "loading";
 
-  const handleChange = (e) =>
-    setForm((p) => ({ ...p, [e.target.name]: e.target.value }));
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setForm((p) => ({ ...p, [name]: value }));
+    // Clear that field's error the moment the user starts fixing it
+    if (errors[name]) setErrors((p) => ({ ...p, [name]: null }));
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!form.name || !form.email || !form.password) {
-      toast.error("Please fill in all fields.");
-      return;
+
+    const fieldErrors = validateForm(form, {
+      name: [validators.name],
+      email: [validators.email],
+      password: [validators.password],
+    });
+
+    if (form.password && form.confirm && form.password !== form.confirm) {
+      fieldErrors.confirm = "Passwords do not match.";
+    } else if (!form.confirm) {
+      fieldErrors.confirm = "Please confirm your password.";
     }
-    if (form.password !== form.confirm) {
-      toast.error("Passwords do not match.");
-      return;
-    }
-    if (form.password.length < 6) {
-      toast.error("Password must be at least 6 characters.");
+
+    if (Object.keys(fieldErrors).length > 0) {
+      setErrors(fieldErrors);
       return;
     }
 
+    setErrors({});
     dispatch(clearError());
 
     const payload = {
@@ -161,16 +173,8 @@ export default function RegisterPage() {
         </p>
       </div>
 
-      {/* ── Right panel — form ─────────────────────────────────────── */}
+      {/* Right panel - form */}
       <div className="flex-1 flex items-center justify-center px-6 py-12 overflow-y-auto">
-        {/*
-          Same card restructure as LoginPage.jsx: the old invalid
-          "border-lg border-stone-700" (border-lg is not a real
-          Tailwind utility, so this never rendered a visible border
-          correctly anyway) is replaced with a clean rounded card,
-          shadow, and the same accent-sweep top strip for visual
-          consistency between the two auth pages.
-        */}
         <div className="w-full max-w-sm page-enter rounded-md shadow-md bg-white overflow-hidden">
           <div className="accent-sweep h-1.5 w-full" />
 
@@ -194,7 +198,7 @@ export default function RegisterPage() {
               </h1>
             </div>
 
-            <form onSubmit={handleSubmit} className="space-y-5">
+            <form onSubmit={handleSubmit} noValidate className="space-y-3">
               <div className="space-y-1">
                 <label className="label-mono">Full Name</label>
                 <input
@@ -202,10 +206,17 @@ export default function RegisterPage() {
                   name="name"
                   value={form.name}
                   onChange={handleChange}
-                  placeholder="Ruwan Perera"
-                  className="input-field text-[12px] sm:text-lg rounded-[12px]"
-                  style={{ fontFamily: "'Fredoka', sans-serif" }} 
+                  placeholder="Enter your full name"
+                  className={`input-field text-[12px] sm:text-[14px] rounded-[12px] ${
+                    errors.name ? "border-red-400 focus:border-red-400" : ""
+                  }`}
+                  style={{ fontFamily: "'Fredoka', sans-serif" }}
                 />
+                {errors.name && (
+                  <p className="text-xs text-red-500" style={{ fontFamily: "'Fredoka', sans-serif" }}>
+                    {errors.name}
+                  </p>
+                )}
               </div>
 
               <div className="space-y-1.5">
@@ -215,10 +226,17 @@ export default function RegisterPage() {
                   name="email"
                   value={form.email}
                   onChange={handleChange}
-                  placeholder="you@studio.com"
-                  className="input-field text-[12px] sm:text-lg rounded-[12px]"
+                  placeholder="you@gmail.com"
+                  className={`input-field text-[12px] sm:text-[14px] rounded-[12px] ${
+                    errors.email ? "border-red-400 focus:border-red-400" : ""
+                  }`}
                   style={{ fontFamily: "'Fredoka', sans-serif" }}
                 />
+                {errors.email && (
+                  <p className="text-xs text-red-500" style={{ fontFamily: "'Fredoka', sans-serif" }}>
+                    {errors.email}
+                  </p>
+                )}
               </div>
 
               <div className="space-y-1.5">
@@ -230,7 +248,9 @@ export default function RegisterPage() {
                     value={form.password}
                     onChange={handleChange}
                     placeholder="Min. 6 characters"
-                    className="input-field text-[12px] sm:text-lg rounded-[12px]"
+                    className={`input-field text-[12px] sm:text-[14px] rounded-[12px] ${
+                      errors.password ? "border-red-400 focus:border-red-400" : ""
+                    }`}
                     style={{ fontFamily: "'Fredoka', sans-serif" }}
                   />
                   <button
@@ -242,6 +262,11 @@ export default function RegisterPage() {
                     {show ? <EyeOff size={18} /> : <Eye size={18} />}
                   </button>
                 </div>
+                {errors.password && (
+                  <p className="text-xs text-red-500" style={{ fontFamily: "'Fredoka', sans-serif" }}>
+                    {errors.password}
+                  </p>
+                )}
 
                 {form.password && (
                   <div className="space-y-1">
@@ -272,17 +297,24 @@ export default function RegisterPage() {
                   value={form.confirm}
                   onChange={handleChange}
                   placeholder="••••••••"
-                  className={`input-field text-[12px] sm:text-lg rounded-[12px] ${
-                    form.confirm && form.confirm !== form.password
-                      ? "border-red-300 focus:border-red-400"
+                  className={`input-field text-[12px] sm:text-[14px] rounded-[12px] ${
+                    errors.confirm || (form.confirm && form.confirm !== form.password)
+                      ? "border-red-400 focus:border-red-400"
                       : ""
                   }`}
                   style={{ fontFamily: "'Fredoka', sans-serif" }}
                 />
-                {form.confirm && form.confirm !== form.password && (
-                  <p className="font-mono text-xs text-red-500">
-                    Passwords do not match.
+                {errors.confirm ? (
+                  <p className="text-xs text-red-500" style={{ fontFamily: "'Fredoka', sans-serif" }}>
+                    {errors.confirm}
                   </p>
+                ) : (
+                  form.confirm &&
+                  form.confirm !== form.password && (
+                    <p className="text-xs text-red-500" style={{ fontFamily: "'Fredoka', sans-serif" }}>
+                      Passwords do not match.
+                    </p>
+                  )
                 )}
               </div>
 
