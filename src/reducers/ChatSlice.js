@@ -28,9 +28,9 @@ export const sendChatMessage = createAsyncThunk(
 function makeMessage(role, content) {
   return {
     id: `${role}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-    role,       // "user" | "bot"
+    role,
     content,
-    timestamp: new Date().toISOString(),
+    time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
   };
 }
 

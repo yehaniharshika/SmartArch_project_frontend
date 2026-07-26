@@ -1,7 +1,3 @@
-/**
- * SmartArch — App Constants
- */
-
 export const APP_NAME = "SmartArch";
 export const APP_VERSION = "1.0.0";
 

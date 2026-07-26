@@ -119,10 +119,10 @@ export default function ChatPage() {
         </div>
       </div>
 
-      {/* ── Main layout — fills remaining height, itself never scrolls ── */}
+      {/* Main layout — fills remaining height, itself never scrolls */}
       <div className="flex-1 min-h-0 max-w-[1600px] w-full mx-auto flex gap-6 px-4 sm:px-6 py-6 overflow-hidden">
 
-        {/* ── Chat panel ──────────────────────────────────────────── */}
+        {/* Chat panel */}
         <div className="flex-1 flex flex-col gap-4 min-w-0 min-h-0">
 
           {/* Messages Area — THE ONLY scrollable region in the chat panel.
